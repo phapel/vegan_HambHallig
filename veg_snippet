@@ -1,0 +1,59 @@
+#prep
+pacman::p_load('readr','readxl','tidyverse','gpx','vegan','betapart','ggtern',
+               'adespatial', 'ade4')
+#botany 
+raw<-read_xlsx(path="~/daten_vegetation_salzmarsch.xlsx") 
+#wrangle bot
+raw<-raw[1:46,]
+raw<-raw[-c(1:4,11:13,26:28),] %>% select(-c(2:42)) %>% t() %>% as_data_frame()
+names(raw)<-as.character(raw[1,]) 
+raw<-raw[-1,] %>% select(!c(Gruppe,(14:17)))%>%
+  mutate(plot=tolower(paste(`Transekt-Nr`,Marschzone,`Lfd Nr`,sep='_'))) 
+raw[6:31]<-lapply(raw[6:31],as.numeric)
+
+
+#geo 
+geo1<-read_gpx("~/Plots_Hamburger_Hallig_2024.gpx")
+#wrangle geo
+geo<-geo1[["waypoints"]] 
+geo<- st_as_sf(geo, coords = c("Longitude", "Latitude"), crs = 4326) 
+geo$Name<-tolower(geo$Name)
+geo<-st_transform(geo,4647)%>% subset(!grepl('seb',Name)) 
+geo$Name<-gsub("^(.{6})(.*)$","\\1_\\2",geo$Name)
+colnames(geo)[3] <- "plot"
+
+join<-inner_join(raw,geo,by=join_by('plot')) #match matrixes
+geo2<-join %>% select(c(plot,geometry)) %>% st_as_sf()
+geo_d<-st_distance(geo2,geo2)
+
+#community matrix (col=spec, row=plot) + abiotik
+bot_com_p<-raw %>% select(c(14:32)) 
+botcommp<-bot_com_p %>% as.data.frame()
+rownames(botcommp)<-botcommp$plot
+botcommp<-botcommp[,-c(18,19)]
+bot_com<-bot_com_p[,-c(18,19)] %>% as.matrix() 
+bot_env<-raw %>% select(c(Nutzung,plot,Marschzone, 13 )) %>% rename_with(.cols=4,~"hoehe")
+bot_env$Nutzung<-as.factor(bot_env$Nutzung)
+
+#beta metrics
+
+l<-list(bray<-vegdist(botcommp,method="bray"),
+        jaccard<-vegdist(botcommp,method="jaccard"))
+
+for(i in l){
+  set.seed(6)
+  print(mantel(i,geo_d,permutations=9999))
+  print(mean(i))
+  print(sd(i))
+  print(adonis2(i~hoehe, data=bot_env, permutations = 9999))
+  print(adonis2(i~Nutzung, data=bot_env, permutations = 9999))
+}
+
+beta.pair.abund(botcommp, index.family = "bray")
+beta.multi.abund(botcommp,index.family = "bray")
+
+bot_com_pa<-ifelse(bot_com>0,1,0) #pa4jaccard_part
+beta.pair(bot_com_pa,index.family = "jaccard")
+beta.multi(bot_com_pa,index.family = "jaccard")
+
+beta.div(bot_com,method="hellinger")
