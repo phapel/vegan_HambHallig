@@ -1,6 +1,6 @@
 #prep
 library("pacman")
-pacman::p_load('readr','readxl','tidyverse','gpx','vegan','betapart','ggtern',
+pacman::p_load('readr','readxl','tidyverse','gpx','vegan','betapart','sf',
                'adespatial', 'ade4')
 #botany 
 raw<-read_xlsx(path="~/daten_vegetation_salzmarsch.xlsx") 
@@ -49,7 +49,7 @@ for(i in l){
   print(adonis2(i~hoehe, data=bot_env, permutations = 9999))
   print(adonis2(i~Nutzung, data=bot_env, permutations = 9999))
 }
-
+#nestedness, turnover
 beta.pair.abund(botcommp, index.family = "bray")
 beta.multi.abund(botcommp,index.family = "bray")
 
@@ -57,4 +57,5 @@ bot_com_pa<-ifelse(bot_com>0,1,0) #pa4jaccard_part
 beta.pair(bot_com_pa,index.family = "jaccard")
 beta.multi(bot_com_pa,index.family = "jaccard")
 
+# spec + site contribution
 beta.div(bot_com,method="hellinger")
